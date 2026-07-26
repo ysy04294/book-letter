@@ -1,12 +1,17 @@
 /* =========================================================
    사진 업로드 프록시 (Vercel 서버리스 함수)
 
-   브라우저에서 이미지 호스팅에 직접 올리면 CORS에 막히기 때문에
-   서버를 한 번 경유한다. 사진은 catbox.moe에 올리고 짧은 URL만
-   돌려줘서, 편지 링크에 사진 데이터가 통째로 들어가지 않도록 한다.
+   브라우저에서 이미지 호스팅에 직접 올리면 CORS에 막히고,
+   키 없이 쓰는 익명 호스팅(catbox 등)은 서버 IP를 차단한다.
+   그래서 정식 API(imgbb)를 서버에서 호출한다.
+
+   설정: Vercel 프로젝트 환경변수에 IMGBB_API_KEY 추가
+        (https://api.imgbb.com 에서 무료 발급)
+   설정이 없으면 501을 돌려주고, 클라이언트가 알아서
+   "링크에 직접 담기" 방식으로 대체한다.
 
    요청: POST /api/upload  (본문 = 이미지 바이너리, Content-Type: image/*)
-   응답: { url: "https://files.catbox.moe/xxxx.jpg" }
+   응답: { url: "https://i.ibb.co/xxxx/photo.jpg" }
    ========================================================= */
 
 const MAX_BYTES = 4 * 1024 * 1024; // Vercel 요청 본문 한도(4.5MB) 안쪽으로
@@ -28,6 +33,12 @@ export default async function handler(req, res) {
     return;
   }
 
+  const apiKey = process.env.IMGBB_API_KEY;
+  if (!apiKey) {
+    res.status(501).json({ error: "이미지 호스팅이 아직 설정되지 않았어요" });
+    return;
+  }
+
   try {
     const contentType = String(req.headers["content-type"] || "");
     if (!contentType.startsWith("image/")) {
@@ -41,34 +52,29 @@ export default async function handler(req, res) {
       return;
     }
 
-    const ext = contentType.includes("png") ? "png"
-      : contentType.includes("webp") ? "webp"
-      : "jpg";
+    const body = new URLSearchParams();
+    body.set("key", apiKey);
+    body.set("image", buf.toString("base64"));
 
-    const form = new FormData();
-    form.append("reqtype", "fileupload");
-    form.append("fileToUpload", new Blob([buf], { type: contentType }), `photo.${ext}`);
-
-    const upstream = await fetch("https://catbox.moe/user/api.php", {
+    const upstream = await fetch("https://api.imgbb.com/1/upload", {
       method: "POST",
-      body: form,
-      headers: {
-        // 기본 UA로는 거부당하는 경우가 있어 일반 브라우저처럼 보낸다
-        "User-Agent": "Mozilla/5.0 (compatible; book-letter/1.0)"
-      }
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body
     });
 
-    const text = (await upstream.text()).trim();
-    if (!upstream.ok || !/^https?:\/\//.test(text)) {
+    const json = await upstream.json().catch(() => null);
+    const url = json && json.data && (json.data.url || json.data.display_url);
+
+    if (!upstream.ok || !url) {
       res.status(502).json({
         error: "업로드에 실패했어요",
         upstreamStatus: upstream.status,
-        upstreamBody: text.slice(0, 200)
+        upstreamBody: JSON.stringify(json).slice(0, 200)
       });
       return;
     }
 
-    res.status(200).json({ url: text });
+    res.status(200).json({ url });
   } catch (e) {
     if (e && e.message === "too-large") {
       res.status(413).json({ error: "사진이 너무 커요" });
