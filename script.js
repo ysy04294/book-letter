@@ -5,6 +5,22 @@
   "use strict";
 
   /* ---------------------------------------------------------
+     iOS Safari의 100svh 계산 버그 대응
+     — 주소창/하단 툴바가 움직일 때 svh가 즉시 맞게 갱신되지 않아
+       화면 아래쪽(날짜 스탬프 등)이 브라우저 UI에 가려지는 경우가 있다.
+       실제 보이는 높이(innerHeight)를 재서 CSS 변수로 직접 넘겨준다.
+  --------------------------------------------------------- */
+  function setViewportHeightVar(){
+    document.documentElement.style.setProperty("--vh", window.innerHeight + "px");
+  }
+  setViewportHeightVar();
+  window.addEventListener("resize", setViewportHeightVar);
+  window.addEventListener("orientationchange", setViewportHeightVar);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", setViewportHeightVar);
+  }
+
+  /* ---------------------------------------------------------
      링크 payload: JSON <-> lz-string
   --------------------------------------------------------- */
   const Payload = {
@@ -87,32 +103,54 @@
     }
   }
 
-  // 업로드가 안 될 때의 최후 수단: 아주 작게 리사이즈/압축한 JPEG data URI
-  function fileToDataUri(file, maxDim, quality){
+  function loadImageEl(file){
     return new Promise((resolve, reject) => {
       const img = new Image();
       const objUrl = URL.createObjectURL(file);
-      img.onload = () => {
-        const w = img.naturalWidth, h = img.naturalHeight;
-        const scale = Math.min(1, maxDim / Math.max(w, h));
-        const c = document.createElement("canvas");
-        c.width = Math.max(1, Math.round(w * scale));
-        c.height = Math.max(1, Math.round(h * scale));
-        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-        URL.revokeObjectURL(objUrl);
-        resolve(c.toDataURL("image/jpeg", quality));
-      };
+      img.onload = () => { URL.revokeObjectURL(objUrl); resolve(img); };
       img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error("이미지를 읽을 수 없어요")); };
       img.src = objUrl;
     });
   }
 
+  function drawToDataUri(img, dim, quality){
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const scale = Math.min(1, dim / Math.max(w, h));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(w * scale));
+    c.height = Math.max(1, Math.round(h * scale));
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", quality);
+  }
+
+  // 업로드가 안 될 때의 최후 수단: 목표 글자수(budget) 아래로 내려갈 때까지
+  // 품질 → 해상도를 단계적으로 낮춰서 리사이즈/압축한다.
+  // (실사 사진은 단색 테스트 이미지보다 훨씬 안 압축되기 때문에 한 번에 맞는
+  //  크기를 예측하기 어려워서, 결과를 직접 재보고 줄여나가는 방식으로 처리)
+  async function fileToDataUri(file, maxDim, quality, budget){
+    const img = await loadImageEl(file);
+    let dim = maxDim;
+    let q = quality;
+    let uri = drawToDataUri(img, dim, q);
+
+    for (let i = 0; i < 8 && uri.length > budget; i++) {
+      if (q > 0.35) {
+        q = Math.max(0.35, q - 0.12);
+      } else {
+        dim = Math.round(dim * 0.75);
+      }
+      if (dim < 80) break;
+      uri = drawToDataUri(img, dim, q);
+    }
+    return { uri, oversized: uri.length > budget };
+  }
+
   // 보관함에서 고른 파일을 짧은 URL로 변환 (업로드 우선, 실패 시 초소형 data URI)
-  async function pickedFileToUrl(file, maxDim, quality){
+  async function pickedFileToUrl(file, maxDim, quality, budget){
     const hosted = await uploadImage(file);
-    if (hosted) return { url: hosted, embedded: false };
-    const dataUri = await fileToDataUri(file, maxDim, quality);
-    return { url: dataUri, embedded: true };
+    if (hosted) return { url: hosted, embedded: false, oversized: false };
+    const { uri, oversized } = await fileToDataUri(file, maxDim, quality, budget || 4000);
+    return { url: uri, embedded: true, oversized };
   }
 
   /* ---------------------------------------------------------
