@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>친구에게 편지 쓰기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="write">
+<div class="viewport">
+  <div class="write-page bg-stripe" style="position:relative;">
+    <div class="write-inner">
+
+      <header class="write-header">
+        <div class="mini-envelope"></div>
+        <h1>독후감 답장 편지 쓰기</h1>
+        <p>추천받은 책을 다 읽고, 친구에게 짧은 편지를 남겨보세요.</p>
+      </header>
+
+      <form class="write-form" id="writeForm">
+        <div class="field">
+          <label for="toName">받는 사람 이름</label>
+          <input id="toName" type="text" maxlength="20" placeholder="예) 쏘영" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <label for="bookTitle">책 제목</label>
+          <input id="bookTitle" type="text" maxlength="40" placeholder="예) 안녕이라 그랬어" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <label for="bookAuthor">저자</label>
+          <input id="bookAuthor" type="text" maxlength="20" placeholder="예) 임선우" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <label>책 표지 <span class="hint">(비워두면 책 제목으로 자동 검색해요)</span></label>
+          <div class="media-row">
+            <div class="media-thumb is-empty" id="coverPreview" aria-hidden="true"></div>
+            <button type="button" class="btn-file" id="coverPick">📷 사진 보관함에서 선택</button>
+            <button type="button" class="btn-clear" id="coverClear" hidden>지우기</button>
+            <input id="coverFile" type="file" accept="image/*" hidden>
+          </div>
+          <input id="coverUrl" type="text" placeholder="또는 이미지 URL 직접 입력 (선택)" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <label for="message">편지 내용</label>
+          <textarea id="message" maxlength="600" placeholder="책을 읽고 든 생각을 편하게 적어주세요."></textarea>
+          <span class="hint">줄바꿈은 그대로 편지에 반영돼요.</span>
+        </div>
+
+        <div class="field">
+          <label>폴라로이드 사진</label>
+          <div class="media-row">
+            <div class="media-thumb media-thumb--polaroid" id="photoPreview" aria-hidden="true"></div>
+            <button type="button" class="btn-file" id="photoPick">📷 사진 보관함에서 선택</button>
+            <button type="button" class="btn-clear" id="photoClear" hidden>지우기</button>
+            <input id="photoFile" type="file" accept="image/*" hidden>
+          </div>
+          <input id="photoUrl" type="text" value="assets/polaroid-sample.jpg" placeholder="또는 이미지 URL 직접 입력" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <label for="caption">폴라로이드 캡션</label>
+          <input id="caption" type="text" maxlength="30" value="쿠키야 건강만 하자" placeholder="예) 쿠키야 건강만 하자" autocomplete="off">
+        </div>
+      </form>
+
+      <section>
+        <p class="preview-label">미리보기</p>
+        <div class="mini-stage">
+          <div class="letter-card" id="pvLetter">
+            <div class="letter-text">
+              <p class="letter-to" id="pvTo">to. ***에게</p>
+              <p class="letter-body" id="pvBody"></p>
+            </div>
+          </div>
+
+          <div class="author-badge" id="pvBadge">
+            <span class="book-title" id="pvBookTitle"></span>
+            <span class="book-author" id="pvBookAuthor"></span>
+          </div>
+
+          <div class="polaroid" id="pvPolaroid">
+            <div class="photo" id="pvPhoto"></div>
+            <span class="caption" id="pvCaption"></span>
+          </div>
+        </div>
+      </section>
+
+      <div class="send-btn-wrap">
+        <button type="button" class="btn-primary" id="sendBtn">친구에게 보내기</button>
+      </div>
+
+      <div class="link-result" id="linkResult" hidden>
+        <strong>생성된 링크 (자동으로 복사됐어요)</strong>
+        <a id="linkAnchor" href="#" target="_blank" rel="noopener"></a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">링크가 복사됐어요</div>
+
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+<script src="script.js"></script>
+<script>
+(function(){
+  "use strict";
+  var App = window.LetterApp;
+
+  var els = {
+    toName: document.getElementById("toName"),
+    bookTitle: document.getElementById("bookTitle"),
+    bookAuthor: document.getElementById("bookAuthor"),
+    coverUrl: document.getElementById("coverUrl"),
+    coverPreview: document.getElementById("coverPreview"),
+    coverPick: document.getElementById("coverPick"),
+    coverClear: document.getElementById("coverClear"),
+    coverFile: document.getElementById("coverFile"),
+    message: document.getElementById("message"),
+    photoUrl: document.getElementById("photoUrl"),
+    photoPreview: document.getElementById("photoPreview"),
+    photoPick: document.getElementById("photoPick"),
+    photoClear: document.getElementById("photoClear"),
+    photoFile: document.getElementById("photoFile"),
+    caption: document.getElementById("caption"),
+
+    pvTo: document.getElementById("pvTo"),
+    pvBody: document.getElementById("pvBody"),
+    pvBookTitle: document.getElementById("pvBookTitle"),
+    pvBookAuthor: document.getElementById("pvBookAuthor"),
+    pvPhoto: document.getElementById("pvPhoto"),
+    pvCaption: document.getElementById("pvCaption"),
+
+    sendBtn: document.getElementById("sendBtn"),
+    linkResult: document.getElementById("linkResult"),
+    linkAnchor: document.getElementById("linkAnchor"),
+    toast: document.getElementById("toast")
+  };
+
+  // 사진 보관함에서 고른 이미지는 압축된 data URI로 보관 (URL 입력보다 우선)
+  var picked = { cover: null, photo: null };
+
+  function currentData(){
+    return {
+      to: els.toName.value.trim(),
+      message: els.message.value,
+      bookTitle: els.bookTitle.value.trim(),
+      author: els.bookAuthor.value.trim(),
+      coverUrl: picked.cover || els.coverUrl.value.trim(),
+      photoUrl: picked.photo || els.photoUrl.value.trim(),
+      caption: els.caption.value.trim()
+    };
+  }
+
+  // 파일 → 리사이즈/압축된 JPEG data URI (링크에 담기므로 작게 유지)
+  function fileToDataUri(file, maxDim, quality){
+    return new Promise(function(resolve, reject){
+      var img = new Image();
+      var objUrl = URL.createObjectURL(file);
+      img.onload = function(){
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var scale = Math.min(1, maxDim / Math.max(w, h));
+        var c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(w * scale));
+        c.height = Math.max(1, Math.round(h * scale));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(objUrl);
+        resolve(c.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = function(){
+        URL.revokeObjectURL(objUrl);
+        reject(new Error("이미지를 읽을 수 없어요"));
+      };
+      img.src = objUrl;
+    });
+  }
+
+  function wirePicker(kind, pickBtn, clearBtn, fileInput, urlInput, maxDim, quality){
+    pickBtn.addEventListener("click", function(){ fileInput.click(); });
+
+    fileInput.addEventListener("change", function(){
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      fileToDataUri(file, maxDim, quality).then(function(dataUri){
+        picked[kind] = dataUri;
+        urlInput.value = "";
+        clearBtn.hidden = false;
+        updatePreview();
+      }).catch(function(){
+        showToast("이미지를 불러오지 못했어요");
+      });
+      fileInput.value = "";
+    });
+
+    clearBtn.addEventListener("click", function(){
+      picked[kind] = null;
+      clearBtn.hidden = true;
+      updatePreview();
+    });
+
+    // URL을 직접 입력하기 시작하면 보관함 선택은 해제
+    urlInput.addEventListener("input", function(){
+      if (urlInput.value && picked[kind]) {
+        picked[kind] = null;
+        clearBtn.hidden = true;
+      }
+    });
+  }
+
+  function setThumb(el, url){
+    if (!el) return;
+    if (url) {
+      el.style.backgroundImage = 'url("' + url + '")';
+      el.classList.remove("is-empty");
+    } else {
+      el.style.backgroundImage = "none";
+      el.classList.add("is-empty");
+    }
+  }
+
+  function updatePreview(){
+    var d = currentData();
+    App.fillLetter({ toEl: els.pvTo, bodyEl: els.pvBody, to: d.to, message: d.message });
+    App.fillBadge({ titleEl: els.pvBookTitle, authorEl: els.pvBookAuthor, bookTitle: d.bookTitle, author: d.author });
+    App.fillPolaroid({ photoEl: els.pvPhoto, captionEl: els.pvCaption, photoUrl: d.photoUrl, caption: d.caption });
+    setThumb(els.coverPreview, d.coverUrl);
+    setThumb(els.photoPreview, d.photoUrl);
+  }
+
+  document.getElementById("writeForm").addEventListener("input", updatePreview);
+  wirePicker("cover", els.coverPick, els.coverClear, els.coverFile, els.coverUrl, 640, 0.6);
+  wirePicker("photo", els.photoPick, els.photoClear, els.photoFile, els.photoUrl, 480, 0.62);
+  updatePreview();
+
+  function showToast(msg){
+    els.toast.textContent = msg;
+    els.toast.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function(){ els.toast.classList.remove("show"); }, 2200);
+  }
+
+  async function copyText(text){
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        return true;
+      } catch (e2) {
+        return false;
+      }
+    }
+  }
+
+  els.sendBtn.addEventListener("click", async function(){
+    var d = currentData();
+    if (!d.to || !d.message) {
+      showToast("받는 사람 이름과 편지 내용을 입력해주세요");
+      return;
+    }
+    els.sendBtn.disabled = true;
+    var hash = App.Payload.encode(d);
+    var base = location.href.replace(/write\.html.*$/, "index.html");
+    var link = base + "#" + hash;
+
+    els.linkAnchor.textContent = link;
+    els.linkAnchor.href = link;
+    els.linkResult.hidden = false;
+
+    var copied = await copyText(link);
+    if (link.length > 30000) {
+      showToast("사진이 담겨 링크가 꽤 길어요 — 메신저에 따라 잘릴 수 있어요");
+    } else {
+      showToast(copied ? "링크가 복사됐어요! 친구에게 보내주세요" : "링크가 생성됐어요");
+    }
+    els.sendBtn.disabled = false;
+  });
+})();
+</script>
+</body>
+</html>

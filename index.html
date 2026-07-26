@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>독후감 답장 편지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="receive">
+
+<div class="viewport">
+  <div class="stage" id="stage" data-phase="idle">
+    <div class="bg-stripe"></div>
+    <div class="bg-cover" id="bgCover"><div class="bg-cover-img" id="bgCoverImg"></div></div>
+
+    <p class="hint-text" id="hintText">봉투를 눌러보세요</p>
+    <a class="go-write" id="goWrite" href="write.html" hidden>✉️ 편지 쓰러 가기</a>
+
+    <div class="recv-envelope-wrap">
+      <div class="envelope"></div>
+    </div>
+
+    <div class="recv-rising" id="recvRising">
+      <div class="letter-card" id="letterCard">
+        <div class="letter-text">
+          <p class="letter-to" id="letterTo">to. ***에게</p>
+          <p class="letter-body" id="letterBody"></p>
+        </div>
+      </div>
+      <div class="recv-polaroid" id="recvPolaroid">
+        <div class="polaroid">
+          <div class="photo" id="polaroidPhoto"></div>
+          <span class="caption" id="polaroidCaption"></span>
+        </div>
+        <div class="polaroid-clip" aria-hidden="true"></div>
+      </div>
+    </div>
+
+    <div class="recv-badge" id="recvBadge">
+      <div class="author-badge">
+        <span class="book-title" id="badgeTitle"></span>
+        <span class="book-author" id="badgeAuthor"></span>
+      </div>
+    </div>
+
+    <div class="recv-footer">
+      <span class="date-stamp" id="dateStamp"></span>
+    </div>
+
+    <button class="tap-catcher" id="tapCatcher" aria-label="봉투 열어 편지 읽기"></button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+<script src="script.js"></script>
+<script>
+(function(){
+  "use strict";
+  var App = window.LetterApp;
+
+  var stage = document.getElementById("stage");
+  var hint = document.getElementById("hintText");
+  var tapCatcher = document.getElementById("tapCatcher");
+  var bgCover = document.getElementById("bgCover");
+  var bgCoverImg = document.getElementById("bgCoverImg");
+  var dateStamp = document.getElementById("dateStamp");
+  var DEFAULT_COVER = "assets/book-cover-default.png";
+
+  var letterTo = document.getElementById("letterTo");
+  var letterBody = document.getElementById("letterBody");
+  var badgeTitle = document.getElementById("badgeTitle");
+  var badgeAuthor = document.getElementById("badgeAuthor");
+  var polaroidPhoto = document.getElementById("polaroidPhoto");
+  var polaroidCaption = document.getElementById("polaroidCaption");
+
+  var hash = location.hash.replace(/^#/, "");
+  var data = App.Payload.decode(hash);
+
+  if (!data || !data.to) {
+    hint.textContent = "아직 담긴 편지가 없어요";
+    document.getElementById("goWrite").hidden = false;
+    tapCatcher.style.display = "none"; // 버튼 클릭을 막지 않도록 제거
+  } else {
+    App.fillLetter({ toEl: letterTo, bodyEl: letterBody, to: data.to, message: data.message });
+    App.fillBadge({ titleEl: badgeTitle, authorEl: badgeAuthor, bookTitle: data.bookTitle, author: data.author });
+    App.fillPolaroid({ photoEl: polaroidPhoto, captionEl: polaroidCaption, photoUrl: data.photoUrl, caption: data.caption });
+  }
+
+  var SHAKE_MS = 700;
+  var OPEN_MS = 1050;
+  var opened = false;
+
+  // 편지가 나오는 시점에 바로 바뀔 수 있도록 미리 표지를 가져와둔다
+  // 카카오 API로 실제 책 표지를 찾으면 그것을, 못 찾으면 기본 표지 이미지를 사용한다
+  function preload(url){
+    return new Promise(function(resolve){
+      var img = new Image();
+      img.onload = function(){ resolve(url); };
+      img.onerror = function(){ resolve(null); };
+      img.src = url;
+    });
+  }
+
+  var coverReady = (data && data.coverUrl ? Promise.resolve(data.coverUrl) : Promise.resolve(null))
+    .then(function(url){ return url ? preload(url) : null; })
+    .then(function(url){
+      if (url) return url;
+      return (data && data.bookTitle) ? App.fetchBookCover(data.bookTitle, data.author) : null;
+    })
+    .then(function(url){ return url ? preload(url) : null; })
+    .then(function(url){ return url || preload(DEFAULT_COVER); });
+
+  function showBookCover(){
+    coverReady.then(function(url){
+      if (!url) return;
+      bgCoverImg.style.backgroundImage = 'url("' + url + '")';
+      bgCover.style.opacity = "1";
+    });
+  }
+
+  function openEnvelope(){
+    if (opened || !data) return;
+    opened = true;
+
+    stage.dataset.phase = "shake";
+    setTimeout(function(){
+      stage.dataset.phase = "open";
+      showBookCover(); // 편지가 봉투에서 나오는 순간 배경을 책 표지로 전환
+    }, SHAKE_MS);
+
+    setTimeout(function(){
+      stage.dataset.phase = "final";
+      dateStamp.textContent = App.formatStamp(new Date());
+    }, SHAKE_MS + OPEN_MS);
+  }
+
+  tapCatcher.addEventListener("click", openEnvelope);
+})();
+</script>
+</body>
+</html>

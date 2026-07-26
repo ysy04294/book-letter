@@ -1,0 +1,15 @@
+# Figma 원본 소스 (대용량, 배포에 불필요)
+idea_test.fig
+
+# 배포용 압축 파일 (매번 새로 생성)
+*.zip
+
+# Claude Code 로컬 설정 (워크스테이션 전용, launch.json은 유지)
+.claude/settings.local.json
+
+# 예전 사본 폴더 (오래된 타임스탬프, 루트 파일이 최신본)
+/letter/
+
+# 참고용 스크린샷 (코드에서 사용 안 함)
+/receive-7.png
+
