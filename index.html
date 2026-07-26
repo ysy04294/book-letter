@@ -17,38 +17,40 @@
     <div class="bg-stripe"></div>
     <div class="bg-cover" id="bgCover"><div class="bg-cover-img" id="bgCoverImg"></div></div>
 
-    <p class="hint-text" id="hintText">봉투를 눌러보세요</p>
-    <a class="go-write" id="goWrite" href="write.html" hidden>✉️ 편지 쓰러 가기</a>
+    <div class="stage-content">
+      <p class="hint-text" id="hintText">봉투를 눌러보세요</p>
+      <a class="go-write" id="goWrite" href="write.html" hidden>✉️ 편지 쓰러 가기</a>
 
-    <div class="recv-envelope-wrap">
-      <div class="envelope"></div>
-    </div>
+      <div class="recv-envelope-wrap">
+        <div class="envelope"></div>
+      </div>
 
-    <div class="recv-rising" id="recvRising">
-      <div class="letter-card" id="letterCard">
-        <div class="letter-text">
-          <p class="letter-to" id="letterTo">to. ***에게</p>
-          <p class="letter-body" id="letterBody"></p>
+      <div class="recv-rising" id="recvRising">
+        <div class="letter-card" id="letterCard">
+          <div class="letter-text">
+            <p class="letter-to" id="letterTo">to. ***에게</p>
+            <p class="letter-body" id="letterBody"></p>
+          </div>
+        </div>
+        <div class="recv-polaroid" id="recvPolaroid">
+          <div class="polaroid">
+            <div class="photo" id="polaroidPhoto"></div>
+            <span class="caption" id="polaroidCaption"></span>
+          </div>
+          <div class="polaroid-clip" aria-hidden="true"></div>
         </div>
       </div>
-      <div class="recv-polaroid" id="recvPolaroid">
-        <div class="polaroid">
-          <div class="photo" id="polaroidPhoto"></div>
-          <span class="caption" id="polaroidCaption"></span>
+
+      <div class="recv-badge" id="recvBadge">
+        <div class="author-badge">
+          <span class="book-title" id="badgeTitle"></span>
+          <span class="book-author" id="badgeAuthor"></span>
         </div>
-        <div class="polaroid-clip" aria-hidden="true"></div>
       </div>
-    </div>
 
-    <div class="recv-badge" id="recvBadge">
-      <div class="author-badge">
-        <span class="book-title" id="badgeTitle"></span>
-        <span class="book-author" id="badgeAuthor"></span>
+      <div class="recv-footer">
+        <span class="date-stamp" id="dateStamp"></span>
       </div>
-    </div>
-
-    <div class="recv-footer">
-      <span class="date-stamp" id="dateStamp"></span>
     </div>
 
     <button class="tap-catcher" id="tapCatcher" aria-label="봉투 열어 편지 읽기"></button>

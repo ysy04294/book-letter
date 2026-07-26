@@ -181,9 +181,9 @@
         clearBtn.hidden = false;
         updatePreview();
         if (result.oversized) {
-          showToast("사진을 최대한 줄였는데도 링크가 길어요 — 사진은 URL로 넣는 걸 추천해요");
+          showToast("사진 업로드에 실패해서 링크에 직접 담았어요 — 링크가 길어 잘릴 수 있어요");
         } else if (result.embedded) {
-          showToast("사진을 작게 압축해서 링크에 담았어요 (호스팅 설정하면 원본 그대로 짧은 링크가 돼요)");
+          showToast("사진 업로드에 실패해서 압축해 담았어요 — 화질이 낮아질 수 있어요");
         }
       }).catch(function(){
         showToast("이미지를 불러오지 못했어요");

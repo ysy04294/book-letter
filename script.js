@@ -10,14 +10,38 @@
        화면 아래쪽(날짜 스탬프 등)이 브라우저 UI에 가려지는 경우가 있다.
        실제 보이는 높이(innerHeight)를 재서 CSS 변수로 직접 넘겨준다.
   --------------------------------------------------------- */
+  const DESIGN_W = 393;
+  const DESIGN_H = 852;
+
   function setViewportHeightVar(){
     document.documentElement.style.setProperty("--vh", window.innerHeight + "px");
   }
-  setViewportHeightVar();
-  window.addEventListener("resize", setViewportHeightVar);
-  window.addEventListener("orientationchange", setViewportHeightVar);
+
+  // Figma 캔버스(393x852)를 화면 안에 통째로 담기는 배율을 구한다.
+  // 화면이 디자인보다 납작하면 축소돼서, 아래쪽 날짜 스탬프가 폴라로이드나
+  // 브라우저 UI에 가려지는 일이 없어진다.
+  function fitStageContent(){
+    const stage = document.querySelector(".stage");
+    if (!stage) return;
+    const w = stage.clientWidth;
+    const h = stage.clientHeight;
+    if (!w || !h) return;
+    const fit = Math.min(w / DESIGN_W, h / DESIGN_H);
+    document.documentElement.style.setProperty("--fit", String(fit));
+  }
+
+  function relayout(){
+    setViewportHeightVar();
+    fitStageContent();
+  }
+
+  relayout();
+  window.addEventListener("resize", relayout);
+  window.addEventListener("orientationchange", relayout);
+  window.addEventListener("load", relayout);
+  document.addEventListener("DOMContentLoaded", relayout);
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", setViewportHeightVar);
+    window.visualViewport.addEventListener("resize", relayout);
   }
 
   /* ---------------------------------------------------------
@@ -79,28 +103,41 @@
   /* ---------------------------------------------------------
      사진 보관함에서 고른 이미지 업로드
      — 링크에 사진을 그대로 박아넣으면(base64) 링크가 너무 길어져서
-       카카오톡 등 메신저에서 잘려버린다. 그래서 익명 이미지 호스팅에
-       올리고 짧은 URL만 링크에 담는다. 클라이언트 ID가 없거나 업로드가
-       실패하면 마지막 수단으로만 base64를 아주 작게 압축해서 사용한다.
+       카카오톡 등 메신저에서 잘려버린다. 그래서 서버(/api/upload)를
+       거쳐 이미지 호스팅에 올리고, 짧은 URL만 링크에 담는다.
+       업로드가 안 되는 환경에서만 최후 수단으로 base64를 쓴다.
   --------------------------------------------------------- */
-  const IMGUR_CLIENT_ID = "YOUR_IMGUR_CLIENT_ID"; // TODO: https://api.imgur.com/oauth2/addclient 에서 발급 (무료, 계정 로그인 불필요한 "익명" 앱)
+
+  // 업로드용으로만 줄인다 — 링크에 안 담기므로 화질을 넉넉히 유지
+  const UPLOAD_MAX_DIM = 1600;
+  const UPLOAD_QUALITY = 0.85;
 
   async function uploadImage(file){
-    if (!IMGUR_CLIENT_ID || IMGUR_CLIENT_ID.indexOf("YOUR_") === 0) return null;
     try {
-      const form = new FormData();
-      form.append("image", file);
-      const res = await fetch("https://api.imgur.com/3/image", {
+      const blob = await shrinkForUpload(file);
+      const res = await fetch("/api/upload", {
         method: "POST",
-        headers: { Authorization: `Client-ID ${IMGUR_CLIENT_ID}` },
-        body: form
+        headers: { "Content-Type": blob.type || "image/jpeg" },
+        body: blob
       });
       if (!res.ok) return null;
       const json = await res.json();
-      return (json && json.data && json.data.link) || null;
+      return (json && json.url) || null;
     } catch (e) {
       return null;
     }
+  }
+
+  // 원본이 수십 MB일 수 있으니 업로드 전에 적당히 줄인다 (화질은 유지)
+  async function shrinkForUpload(file){
+    const img = await loadImageEl(file);
+    if (Math.max(img.naturalWidth, img.naturalHeight) <= UPLOAD_MAX_DIM && file.size <= 3 * 1024 * 1024) {
+      return file;
+    }
+    const canvas = drawToCanvas(img, UPLOAD_MAX_DIM);
+    return new Promise((resolve) => {
+      canvas.toBlob((b) => resolve(b || file), "image/jpeg", UPLOAD_QUALITY);
+    });
   }
 
   function loadImageEl(file){
@@ -113,14 +150,18 @@
     });
   }
 
-  function drawToDataUri(img, dim, quality){
+  function drawToCanvas(img, dim){
     const w = img.naturalWidth, h = img.naturalHeight;
     const scale = Math.min(1, dim / Math.max(w, h));
     const c = document.createElement("canvas");
     c.width = Math.max(1, Math.round(w * scale));
     c.height = Math.max(1, Math.round(h * scale));
     c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-    return c.toDataURL("image/jpeg", quality);
+    return c;
+  }
+
+  function drawToDataUri(img, dim, quality){
+    return drawToCanvas(img, dim).toDataURL("image/jpeg", quality);
   }
 
   // 업로드가 안 될 때의 최후 수단: 목표 글자수(budget) 아래로 내려갈 때까지

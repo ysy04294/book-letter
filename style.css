@@ -282,12 +282,23 @@ input,textarea{ font-family: inherit; }
    index.html — 받는 사람 화면
    ========================================================= */
 .stage{
-  container-type: inline-size;
   position:relative;
   width:100%;
-  height:var(--vh, 100svh); /* 고정 비율(aspect-ratio) 대신 실제 화면 크기에 딱 맞춤 */
+  height:var(--vh, 100svh); /* 배경은 화면을 꽉 채운다 */
   overflow:hidden;
   background:#eaf2fa;
+}
+
+/* 편지 구성 요소는 Figma 캔버스(393x852)를 그대로 유지한 채 통째로
+   축소해서 화면에 맞춘다. 화면 비율이 디자인과 달라도 요소끼리
+   겹치지 않게 하려면 % 좌표를 화면 비율에 맡기면 안 되기 때문. */
+.stage-content{
+  container-type: inline-size;
+  position:absolute;
+  left:50%; top:50%;
+  width:393px; height:852px;
+  transform: translate(-50%,-50%) scale(var(--fit, 1));
+  transform-origin: center center;
 }
 @media (min-width: 431px){
   .viewport{ padding-top: 24px; padding-bottom: 24px; align-items:center; }
