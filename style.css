@@ -79,6 +79,7 @@ input,textarea{ font-family: inherit; }
   width:100%;
   display:flex;
   justify-content:center;
+  align-items:flex-start; /* flex 기본값(stretch)이 .stage의 aspect-ratio를 깨뜨려서 화면 비율이 안 맞던 원인 */
   background: linear-gradient(180deg,#dfeaf3,#c9dcea);
 }
 
@@ -283,15 +284,20 @@ input,textarea{ font-family: inherit; }
 .stage{
   container-type: inline-size;
   position:relative;
-  width:min(100vw, 430px);
-  aspect-ratio: 393 / 852;
+  width:100%;
+  height:100svh; /* 고정 비율(aspect-ratio) 대신 실제 화면 크기에 딱 맞춤 */
   overflow:hidden;
   background:#eaf2fa;
-  box-shadow: 0 30px 60px rgba(20,40,70,0.25);
 }
 @media (min-width: 431px){
-  .viewport{ padding-top: 24px; }
-  .stage{ border-radius: 28px; box-shadow: 0 30px 70px rgba(15,30,55,0.35), 0 0 0 10px #0e1a2b; }
+  .viewport{ padding-top: 24px; padding-bottom: 24px; align-items:center; }
+  .stage{
+    width:min(100%, 430px);
+    height:auto;
+    aspect-ratio: 393 / 852; /* 데스크톱에서만 폰 목업처럼 고정 비율 프레임 */
+    border-radius: 28px;
+    box-shadow: 0 30px 70px rgba(15,30,55,0.35), 0 0 0 10px #0e1a2b;
+  }
 }
 
 .bg-cover{
@@ -341,6 +347,7 @@ input,textarea{ font-family: inherit; }
   z-index:6;
 }
 .go-write:active{ transform:translateX(-50%) translateY(2px); }
+.go-write[hidden]{ display:none; }
 @keyframes hint-pulse{
   0%,100%{ opacity:.4; transform:translateY(0); }
   50%{ opacity:.9; transform:translateY(-3px); }
