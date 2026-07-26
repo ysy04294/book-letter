@@ -51,12 +51,20 @@ export default async function handler(req, res) {
 
     const upstream = await fetch("https://catbox.moe/user/api.php", {
       method: "POST",
-      body: form
+      body: form,
+      headers: {
+        // 기본 UA로는 거부당하는 경우가 있어 일반 브라우저처럼 보낸다
+        "User-Agent": "Mozilla/5.0 (compatible; book-letter/1.0)"
+      }
     });
 
     const text = (await upstream.text()).trim();
     if (!upstream.ok || !/^https?:\/\//.test(text)) {
-      res.status(502).json({ error: "업로드에 실패했어요" });
+      res.status(502).json({
+        error: "업로드에 실패했어요",
+        upstreamStatus: upstream.status,
+        upstreamBody: text.slice(0, 200)
+      });
       return;
     }
 
