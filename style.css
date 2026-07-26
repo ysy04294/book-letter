@@ -506,6 +506,15 @@ input,textarea{ font-family: inherit; }
 .mini-stage .author-badge{ left:9.67%; top:84.71%; }
 .mini-stage .polaroid{ left:51.4%; top:68.14%; width:40.71%; aspect-ratio:160/220; }
 
+.link-len{
+  text-align:center;
+  font-size:11.5px;
+  color:#8ba0b3;
+  margin:-6px 0 16px;
+}
+.link-len.is-warn{ color:#b8860b; font-weight:700; }
+.link-len.is-danger{ color:#d1453b; font-weight:700; }
+
 .send-btn-wrap{ display:flex; justify-content:center; }
 
 .link-result{

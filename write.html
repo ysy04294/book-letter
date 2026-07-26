@@ -93,6 +93,8 @@
         </div>
       </section>
 
+      <p class="link-len" id="linkLen"></p>
+
       <div class="send-btn-wrap">
         <button type="button" class="btn-primary" id="sendBtn">친구에게 보내기</button>
       </div>
@@ -140,13 +142,15 @@
     pvCaption: document.getElementById("pvCaption"),
 
     sendBtn: document.getElementById("sendBtn"),
+    linkLen: document.getElementById("linkLen"),
     linkResult: document.getElementById("linkResult"),
     linkAnchor: document.getElementById("linkAnchor"),
     toast: document.getElementById("toast")
   };
 
-  // 사진 보관함에서 고른 이미지는 압축된 data URI로 보관 (URL 입력보다 우선)
+  // 사진 보관함에서 고른 이미지 URL (짧은 호스팅 URL 우선, 실패 시에만 초소형 data URI)
   var picked = { cover: null, photo: null };
+  var pickedEmbedded = { cover: false, photo: false }; // true면 data URI라 링크가 길어짐
 
   function currentData(){
     return {
@@ -160,48 +164,37 @@
     };
   }
 
-  // 파일 → 리사이즈/압축된 JPEG data URI (링크에 담기므로 작게 유지)
-  function fileToDataUri(file, maxDim, quality){
-    return new Promise(function(resolve, reject){
-      var img = new Image();
-      var objUrl = URL.createObjectURL(file);
-      img.onload = function(){
-        var w = img.naturalWidth, h = img.naturalHeight;
-        var scale = Math.min(1, maxDim / Math.max(w, h));
-        var c = document.createElement("canvas");
-        c.width = Math.max(1, Math.round(w * scale));
-        c.height = Math.max(1, Math.round(h * scale));
-        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-        URL.revokeObjectURL(objUrl);
-        resolve(c.toDataURL("image/jpeg", quality));
-      };
-      img.onerror = function(){
-        URL.revokeObjectURL(objUrl);
-        reject(new Error("이미지를 읽을 수 없어요"));
-      };
-      img.src = objUrl;
-    });
-  }
-
   function wirePicker(kind, pickBtn, clearBtn, fileInput, urlInput, maxDim, quality){
+    var idleLabel = pickBtn.textContent;
+
     pickBtn.addEventListener("click", function(){ fileInput.click(); });
 
     fileInput.addEventListener("change", function(){
       var file = fileInput.files && fileInput.files[0];
       if (!file) return;
-      fileToDataUri(file, maxDim, quality).then(function(dataUri){
-        picked[kind] = dataUri;
+      pickBtn.disabled = true;
+      pickBtn.textContent = "업로드 중...";
+      App.pickedFileToUrl(file, maxDim, quality).then(function(result){
+        picked[kind] = result.url;
+        pickedEmbedded[kind] = result.embedded;
         urlInput.value = "";
         clearBtn.hidden = false;
         updatePreview();
+        if (result.embedded) {
+          showToast("이미지 호스팅 설정이 없어서 사진을 링크에 직접 담았어요 — 링크가 길어질 수 있어요");
+        }
       }).catch(function(){
         showToast("이미지를 불러오지 못했어요");
+      }).then(function(){
+        pickBtn.disabled = false;
+        pickBtn.textContent = idleLabel;
       });
       fileInput.value = "";
     });
 
     clearBtn.addEventListener("click", function(){
       picked[kind] = null;
+      pickedEmbedded[kind] = false;
       clearBtn.hidden = true;
       updatePreview();
     });
@@ -210,6 +203,7 @@
     urlInput.addEventListener("input", function(){
       if (urlInput.value && picked[kind]) {
         picked[kind] = null;
+        pickedEmbedded[kind] = false;
         clearBtn.hidden = true;
       }
     });
@@ -226,6 +220,21 @@
     }
   }
 
+  function updateLinkLen(d){
+    var hash = App.Payload.encode(d);
+    var len = hash.length;
+    var el = els.linkLen;
+    el.textContent = "예상 링크 길이: 약 " + len.toLocaleString() + "자";
+    el.classList.remove("is-warn", "is-danger");
+    if (len > 4000) {
+      el.classList.add("is-danger");
+      el.textContent += " — 메신저에서 잘릴 가능성이 커요. 사진은 URL로 넣어주세요";
+    } else if (len > 1500) {
+      el.classList.add("is-warn");
+      el.textContent += " — 조금 길어요, 일부 메신저에서 잘릴 수 있어요";
+    }
+  }
+
   function updatePreview(){
     var d = currentData();
     App.fillLetter({ toEl: els.pvTo, bodyEl: els.pvBody, to: d.to, message: d.message });
@@ -233,11 +242,12 @@
     App.fillPolaroid({ photoEl: els.pvPhoto, captionEl: els.pvCaption, photoUrl: d.photoUrl, caption: d.caption });
     setThumb(els.coverPreview, d.coverUrl);
     setThumb(els.photoPreview, d.photoUrl);
+    updateLinkLen(d);
   }
 
   document.getElementById("writeForm").addEventListener("input", updatePreview);
-  wirePicker("cover", els.coverPick, els.coverClear, els.coverFile, els.coverUrl, 640, 0.6);
-  wirePicker("photo", els.photoPick, els.photoClear, els.photoFile, els.photoUrl, 480, 0.62);
+  wirePicker("cover", els.coverPick, els.coverClear, els.coverFile, els.coverUrl, 360, 0.5);
+  wirePicker("photo", els.photoPick, els.photoClear, els.photoFile, els.photoUrl, 320, 0.5);
   updatePreview();
 
   function showToast(msg){
@@ -284,8 +294,10 @@
     els.linkResult.hidden = false;
 
     var copied = await copyText(link);
-    if (link.length > 30000) {
-      showToast("사진이 담겨 링크가 꽤 길어요 — 메신저에 따라 잘릴 수 있어요");
+    if (hash.length > 4000) {
+      showToast("링크가 너무 길어요 — 메신저에서 잘려서 안 열릴 수 있어요");
+    } else if (hash.length > 1500) {
+      showToast("링크가 조금 길어요 — 일부 메신저에서 잘릴 수 있어요");
     } else {
       showToast(copied ? "링크가 복사됐어요! 친구에게 보내주세요" : "링크가 생성됐어요");
     }
