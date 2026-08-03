@@ -47,19 +47,50 @@
   /* ---------------------------------------------------------
      링크 payload: JSON <-> lz-string
   --------------------------------------------------------- */
+  // lz-string의 compressToEncodedURIComponent는 결과에 '+' 와 '$' 를 섞어 쓴다.
+  // 이 링크가 메신저를 거치면 '+' 가 '%2B' 로 인코딩되거나 공백으로 바뀌어
+  // 복원이 실패한다("편지가 없다"). 그래서 URL에서 절대 변형되지 않는
+  // base64url(A-Z a-z 0-9 - _)로만 인코딩한다.
   const Payload = {
     encode(data){
-      return LZString.compressToEncodedURIComponent(JSON.stringify(data));
+      return LZString.compressToBase64(JSON.stringify(data))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
     },
+
     decode(hash){
       if (!hash) return null;
-      try {
-        const json = LZString.decompressFromEncodedURIComponent(hash);
-        if (!json) return null;
-        return JSON.parse(json);
-      } catch (e) {
-        return null;
+
+      // 메신저나 브라우저가 퍼센트 인코딩해 버린 경우 먼저 되돌린다
+      let raw = hash;
+      if (/%[0-9A-Fa-f]{2}/.test(raw)) {
+        try { raw = decodeURIComponent(raw); } catch (e) { /* 그대로 진행 */ }
       }
+      raw = raw.trim();
+
+      const candidates = [
+        // 새 방식(base64url)
+        () => {
+          let s = raw.replace(/-/g, "+").replace(/_/g, "/");
+          while (s.length % 4) s += "=";
+          return LZString.decompressFromBase64(s);
+        },
+        // 이전에 보낸 링크 호환
+        () => LZString.decompressFromEncodedURIComponent(raw),
+        // '+' 가 공백으로 바뀐 채 전달된 경우
+        () => LZString.decompressFromEncodedURIComponent(raw.replace(/ /g, "+"))
+      ];
+
+      for (const attempt of candidates) {
+        try {
+          const json = attempt();
+          if (!json) continue;
+          const parsed = JSON.parse(json);
+          if (parsed && typeof parsed === "object") return parsed;
+        } catch (e) { /* 다음 방식으로 */ }
+      }
+      return null;
     }
   };
 

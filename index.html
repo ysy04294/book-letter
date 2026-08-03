@@ -83,7 +83,10 @@
   var data = App.Payload.decode(hash);
 
   if (!data || !data.to) {
-    hint.textContent = "아직 담긴 편지가 없어요";
+    // 해시는 있는데 해석이 안 되면 전달 과정에서 링크가 잘렸거나 깨진 것
+    hint.textContent = hash
+      ? "링크가 잘렸거나 깨졌어요. 보낸 사람에게 다시 받아보세요"
+      : "아직 담긴 편지가 없어요";
     document.getElementById("goWrite").hidden = false;
     tapCatcher.style.display = "none"; // 버튼 클릭을 막지 않도록 제거
   } else {
