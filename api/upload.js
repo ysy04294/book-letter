@@ -35,9 +35,20 @@ async function readBody(req) {
   return Buffer.concat(chunks);
 }
 
+// Vercel Blob 쓰기 토큰 찾기.
+// 연결 방식에 따라 BLOB_READ_WRITE_TOKEN 이 아닌 이름으로 주입되기도 해서,
+// 값 형태(vercel_blob_rw_...)로도 찾는다. 값은 로그에 남기지 않는다.
+function findBlobToken() {
+  if (process.env.BLOB_READ_WRITE_TOKEN) return process.env.BLOB_READ_WRITE_TOKEN;
+  for (const value of Object.values(process.env)) {
+    if (typeof value === "string" && value.startsWith("vercel_blob_rw_")) return value;
+  }
+  return null;
+}
+
 // --- 방법 1: Vercel Blob -------------------------------------------------
 async function uploadToVercelBlob(buf, contentType, ext) {
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  const token = findBlobToken();
   if (!token) return null;
 
   const pathname = `letter-photos/photo.${ext}`;
@@ -88,10 +99,10 @@ export default async function handler(req, res) {
     return;
   }
 
-  if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.IMGBB_API_KEY) {
+  if (!findBlobToken() && !process.env.IMGBB_API_KEY) {
     // 어떤 이름으로 주입됐는지 확인용 (값은 절대 노출하지 않고 이름만)
     const related = Object.keys(process.env)
-      .filter((k) => /BLOB|IMGBB|STORAGE/i.test(k))
+      .filter((k) => /BLOB|IMGBB|STORAGE|TOKEN/i.test(k))
       .sort();
     res.status(501).json({
       error: "이미지 저장소가 아직 설정되지 않았어요",
