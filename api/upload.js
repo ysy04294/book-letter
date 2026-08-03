@@ -47,27 +47,48 @@ function findBlobToken() {
 }
 
 // --- 방법 1: Vercel Blob -------------------------------------------------
+// 저장소가 Public 이면 그 URL을 그대로 쓰고, Private 이면 우리 서버가
+// 대신 읽어서 내려주는 /api/photo 주소를 돌려준다. 어느 쪽이든 받는 사람은
+// 별도 설정 없이 사진을 볼 수 있다.
 async function uploadToVercelBlob(buf, contentType, ext) {
   const token = findBlobToken();
   if (!token) return null;
 
   const pathname = `letter-photos/photo.${ext}`;
-  const upstream = await fetch(`https://blob.vercel-storage.com/${pathname}`, {
-    method: "PUT",
-    headers: {
+  const attempts = [];
+
+  // 1) Public 저장소용
+  // 2) Private 저장소용
+  for (const access of ["public", "private"]) {
+    const headers = {
       authorization: `Bearer ${token}`,
       "x-api-version": BLOB_API_VERSION,
       "x-content-type": contentType,
       "x-add-random-suffix": "1"
-    },
-    body: buf
-  });
+    };
+    if (access === "private") headers["x-access"] = "private";
 
-  const json = await upstream.json().catch(() => null);
-  if (!upstream.ok || !json || !json.url) {
-    return { failed: true, status: upstream.status, body: JSON.stringify(json).slice(0, 200) };
+    const upstream = await fetch(`https://blob.vercel-storage.com/${pathname}`, {
+      method: "PUT",
+      headers,
+      body: buf
+    });
+
+    const json = await upstream.json().catch(() => null);
+    if (upstream.ok && json && json.url) {
+      return {
+        url: access === "public" ? json.url : proxiedPhotoUrl(json.url),
+        access
+      };
+    }
+    attempts.push({ access, status: upstream.status, body: JSON.stringify(json).slice(0, 160) });
   }
-  return { url: json.url };
+
+  return { failed: true, attempts };
+}
+
+function proxiedPhotoUrl(blobUrl) {
+  return `/api/photo?u=${encodeURIComponent(blobUrl)}`;
 }
 
 // --- 방법 2: imgbb -------------------------------------------------------
@@ -131,7 +152,10 @@ export default async function handler(req, res) {
     const attempts = [];
 
     const viaBlob = await uploadToVercelBlob(buf, contentType, ext);
-    if (viaBlob && viaBlob.url) { res.status(200).json({ url: viaBlob.url }); return; }
+    if (viaBlob && viaBlob.url) {
+      res.status(200).json({ url: viaBlob.url, via: "vercel-blob", access: viaBlob.access });
+      return;
+    }
     if (viaBlob) attempts.push({ via: "vercel-blob", ...viaBlob });
 
     const viaImgbb = await uploadToImgbb(buf);
