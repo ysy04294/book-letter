@@ -89,7 +89,14 @@ export default async function handler(req, res) {
   }
 
   if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.IMGBB_API_KEY) {
-    res.status(501).json({ error: "이미지 저장소가 아직 설정되지 않았어요" });
+    // 어떤 이름으로 주입됐는지 확인용 (값은 절대 노출하지 않고 이름만)
+    const related = Object.keys(process.env)
+      .filter((k) => /BLOB|IMGBB|STORAGE/i.test(k))
+      .sort();
+    res.status(501).json({
+      error: "이미지 저장소가 아직 설정되지 않았어요",
+      seenEnvNames: related
+    });
     return;
   }
 
