@@ -99,6 +99,10 @@
         <button type="button" class="btn-primary" id="sendBtn">친구에게 보내기</button>
       </div>
 
+      <div class="drop-photo-wrap" id="dropPhotoWrap" hidden>
+        <button type="button" class="btn-clear" id="dropPhotoBtn">사진 빼고 링크 만들기</button>
+      </div>
+
       <div class="link-result" id="linkResult" hidden>
         <strong>생성된 링크 (자동으로 복사됐어요)</strong>
         <a id="linkAnchor" href="#" target="_blank" rel="noopener"></a>
@@ -143,6 +147,8 @@
 
     sendBtn: document.getElementById("sendBtn"),
     linkLen: document.getElementById("linkLen"),
+    dropPhotoWrap: document.getElementById("dropPhotoWrap"),
+    dropPhotoBtn: document.getElementById("dropPhotoBtn"),
     linkResult: document.getElementById("linkResult"),
     linkAnchor: document.getElementById("linkAnchor"),
     toast: document.getElementById("toast")
@@ -206,11 +212,14 @@
     });
 
     // URL을 직접 입력하기 시작하면 보관함 선택은 해제
+    // (폼의 input 핸들러가 먼저 돌기 때문에 여기서 미리보기를 한 번 더 갱신해야
+    //  화면이 한 박자 늦게 반영되는 문제가 없다)
     urlInput.addEventListener("input", function(){
       if (urlInput.value && picked[kind]) {
         picked[kind] = null;
         pickedEmbedded[kind] = false;
         clearBtn.hidden = true;
+        updatePreview();
       }
     });
   }
@@ -226,17 +235,29 @@
     }
   }
 
+  // 서버 업로드가 안 돼서 링크에 통째로 담긴 사진이 어느 것인지 찾는다
+  function embeddedPhotoFields(d){
+    var names = [];
+    if (String(d.coverUrl).indexOf("data:") === 0) names.push("책 표지");
+    if (String(d.photoUrl).indexOf("data:") === 0) names.push("폴라로이드 사진");
+    return names;
+  }
+
   function updateLinkLen(d){
     var len = App.Payload.encode(d).length;
     var el = els.linkLen;
     el.classList.remove("is-warn", "is-danger");
 
     if (len > MAX_SAFE_HASH) {
+      var names = embeddedPhotoFields(d);
       el.classList.add("is-danger");
-      el.textContent = "⚠️ 사진이 링크에 통째로 담겨서 카톡에서 잘려요. "
-        + "사진의 [지우기]를 누르거나 이미지 주소를 넣어주세요";
+      el.textContent = names.length
+        ? "⚠️ [" + names.join(", ") + "] 사진이 링크에 통째로 담겨서 카톡에서 잘려요"
+        : "⚠️ 내용이 너무 길어서 카톡에서 잘려요 — 편지를 조금 줄여주세요";
+      els.dropPhotoWrap.hidden = names.length === 0;
     } else {
       el.textContent = "링크 길이 " + len.toLocaleString() + "자 — 안전해요";
+      els.dropPhotoWrap.hidden = true;
     }
   }
 
@@ -282,6 +303,22 @@
       }
     }
   }
+
+  // 저장소가 없어 사진이 링크에 담긴 경우, 사진만 빼고 바로 보낼 수 있게 한다
+  els.dropPhotoBtn.addEventListener("click", function(){
+    if (String(currentData().coverUrl).indexOf("data:") === 0) {
+      picked.cover = null;
+      pickedEmbedded.cover = false;
+      els.coverClear.hidden = true;
+    }
+    if (String(currentData().photoUrl).indexOf("data:") === 0) {
+      picked.photo = null;
+      pickedEmbedded.photo = false;
+      els.photoClear.hidden = true;
+    }
+    updatePreview();
+    showToast("사진을 뺐어요. 이제 보내기를 눌러주세요");
+  });
 
   els.sendBtn.addEventListener("click", async function(){
     var d = currentData();
